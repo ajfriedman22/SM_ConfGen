@@ -10,6 +10,10 @@ from SM_ConfGen.utils import utils
 from SM_ConfGen.utils.exception import ParameterError
 from SM_ConfGen.utils import gmx_parser
 from mpi4py import MPI
+from openff.toolkit import Molecule, ForceField
+from openff.units import unit
+import numpy as np
+from openff.interchange import Interchange
 
 comm = MPI.COMM_WORLD
 rank = comm.Get_rank()
@@ -284,6 +288,18 @@ class SM_REMD:
         ----------
 
         """
+        #Ensure unique atom names
+        
+
+        #Create interchange object
+        mol = Molecule.from_file(processed_input)
+        sage = ForceField("openff-2.0.0.offxml")
+        cubic_box = unit.Quantity(30 * np.eye(3), unit.angstrom)
+        interchange = Interchange.from_smirnoff(topology=[mol], force_field=sage, box=cubic_box)
+
+        #Eport topology and coordinates
+        interchange.to_gro('prep/conf.gro')
+        interchange.to_top('prep/topol.top')
 
     def solvate_system(self):
         """
