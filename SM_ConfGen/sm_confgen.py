@@ -7,6 +7,7 @@ import random
 import warnings
 import subprocess
 from SM_ConfGen.utils import utils
+from SM_ConfGen.utils import analysis_func as af
 from SM_ConfGen.utils.exception import ParameterError
 from SM_ConfGen.utils import gmx_parser
 from mpi4py import MPI
@@ -284,12 +285,18 @@ class SM_REMD:
         """
         Prepares the system files for all replicate simulations
 
-        Parameters
-        ----------
-
         """
         #Ensure unique atom names
-        
+        input_file = open(self.input_file, 'r')
+        file_name, file_ext = os.path.splitext(self.input_file)
+        processed_input = f'prep/{file_name}_processed{file_ext}'
+        if not os.path.exists('prep'):
+            os.mkdir('prep')
+        output_file = open(processed_input, 'w')
+        for line in input_file:
+            splt_line = line.split(' ')
+            # ************************* FINISH HERE ************************************
+
 
         #Create interchange object
         mol = Molecule.from_file(processed_input)
@@ -515,6 +522,42 @@ class SM_REMD:
         returncode, stdout, stderr = utils.run_gmx_cmd(arguments)
         if returncode != 0:
                 print(f'Error (return code: {returncode}):\n{stderr}')
+
+    def process_traj(self, ):
+        """
+        Center trajectory for analysis
+
+        """
+        #Check that trajectory is present to process
+        if not os.path.exists('rep_0/md.xtc'):
+            raise Exception('Error: Trajectory rep_0/md.xtc does not exsist')
+        if not os.path.exists('rep_0/md.gro'):
+            raise Exception('Error: File rep_0/md.gro does not exsist')
+        
+        #Create analysis directory if not present
+        if not os.path.exists('analysis'):
+            os.mkdir('analysis')
+
+        #Center trajectory
+        arguments = [self.gmx_executable, 'trjconv', '-s', 'rep_0/md.tpr', '-f', 'rep_0/md.xtc', '-pbc', 'cluster', '-center', '-o', 'analysis/center.xtc']
+        returncode, stdout, stderr = utils.run_gmx_cmd(arguments, prompt_input=['', '\n', ])
+        if returncode != 0:
+            print(f'Error (return code: {returncode}):\n{stderr}')
+        
+        #Create GRO File with just the ligand
+        arguments = [self.gmx_executable, 'trjconv', '-s', 'rep_0/md.gro', '-f', 'rep_0/md.gro', '-o', 'analysis/md.gro']
+        returncode, stdout, stderr = utils.run_gmx_cmd(arguments, prompt_input=['', '\n'])
+        if returncode != 0:
+            print(f'Error (return code: {returncode}):\n{stderr}')
+        
+    def compute_dihedral_peaks(self, ):
+        """
+        
+        """
+        #Get indices for all dihedrals in small molecule
+        define_dihedrals = af.define_dihedral('prep/topol.top')
+    
+
 
 if __name__ == "__main__":
     # Do something if this file is invoked on its own
