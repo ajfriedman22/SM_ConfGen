@@ -65,7 +65,7 @@ def define_dihedral(top_file : str):
     df = pd.DataFrame({'Dihedral Number': dihedral_num, 'Atom Name 1': atom_1, 'Atom Name 2': atom_2, 'Atom Name 3': atom_3, 'Atom Name 4': atom_4})
     return df
 
-def get_dihedral(dihedrals_df : pd.DataFrame, traj : md.trajectory):
+def get_dihedral(dihedrals_df : pd.DataFrame, traj : md.Trajectory):
     """
     Determines the value for the all dihedral angles in the small molecule
 

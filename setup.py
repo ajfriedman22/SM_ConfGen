@@ -85,12 +85,11 @@ setup(
         'seaborn',
         'matplotlib',
         'mpi4py',
+        'openff-toolkit'
     ],
 
     platforms=['Linux',
-               'Mac OS-X',
-               'Unix',
-               'Windows'],            # Valid platforms your code works on, adjust to your flavor
+               'Unix',],            # Valid platforms your code works on, adjust to your flavor
     
     python_requires=">=3.8",          # Python version restrictions
 

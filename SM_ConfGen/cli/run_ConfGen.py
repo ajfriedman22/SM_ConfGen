@@ -79,7 +79,7 @@ def main():
         TREMD.run_grompp('EM')
 
     #Step 5: Preform NVT equilibration (if files not available)
-    if not os.path.exists('prep/rep_0/nvt.gro') and not os.path.exists(f'prep/rep_{TREMD.n_rep-1}/nvt.gro'):
+    if not os.path.exists('prep/rep_0/nvt.gro') and not os.path.exists(f'prep/rep_{TREMD.n_rep-1}/nvt.gro'): #************ NEED TO ALL TEMPS ***********************
         # 5-1. Set up input files for all simulations
         if rank == 0:
             os.chdir('prep')

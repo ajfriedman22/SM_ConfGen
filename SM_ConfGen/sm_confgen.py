@@ -3,12 +3,10 @@ import os
 import sys
 import copy
 import yaml
-import random
-import warnings
 import subprocess
 from SM_ConfGen.utils import utils
 from SM_ConfGen.utils import analysis_func as af
-from SM_ConfGen.utils.exception import ParameterError
+from SM_ConfGen.utils.exceptions import ParameterError
 from SM_ConfGen.utils import gmx_parser
 from mpi4py import MPI
 from openff.toolkit import Molecule, ForceField
@@ -281,25 +279,13 @@ class SM_REMD:
 
         return MDP
     
-    def parameterize_system(self, ):
+    def parameterize_system(self):
         """
         Prepares the system files for all replicate simulations
 
         """
-        #Ensure unique atom names
-        input_file = open(self.input_file, 'r')
-        file_name, file_ext = os.path.splitext(self.input_file)
-        processed_input = f'prep/{file_name}_processed{file_ext}'
-        if not os.path.exists('prep'):
-            os.mkdir('prep')
-        output_file = open(processed_input, 'w')
-        for line in input_file:
-            splt_line = line.split(' ')
-            # ************************* FINISH HERE ************************************
-
-
         #Create interchange object
-        mol = Molecule.from_file(processed_input)
+        mol = Molecule.from_file(self.input_file)
         sage = ForceField("openff-2.0.0.offxml")
         cubic_box = unit.Quantity(30 * np.eye(3), unit.angstrom)
         interchange = Interchange.from_smirnoff(topology=[mol], force_field=sage, box=cubic_box)
@@ -307,6 +293,14 @@ class SM_REMD:
         #Eport topology and coordinates
         interchange.to_gro('prep/conf.gro')
         interchange.to_top('prep/topol.top')
+
+        #Add water and ion atom types from data
+
+        #Add water and ion molecule types from data
+
+        #Add position restraint section to topology
+
+        #Create position restraints file
 
     def solvate_system(self):
         """
