@@ -23,9 +23,9 @@ def initialize(args):
     parser.add_argument('-o',
                         '--output',
                         type=str,
-                        default='run_REXEE_log.txt',
+                        default='ConfGen_log.txt',
                         help='The output file for logging how replicas interact with each other. \
-                            (Default: run_REXEE_log.txt)')
+                            (Default: ConfGen_log.txt)')
     parser.add_argument('-m',
                         '--maxwarn',
                         type=int,
@@ -67,7 +67,7 @@ def main():
     #Step 2: Parameterize System (if files not available)
     if not os.path.exists('prep/conf.gro') or not os.path.exists('prep/topol.top'):
         if not os.path.exists('prep'):
-            os.mkdir('path')
+            os.mkdir('prep')
         TREMD.parameterize_system()
     
     #Step 3: Solvate and Neutralize System (if files not available)
@@ -79,11 +79,11 @@ def main():
         TREMD.run_grompp('EM')
 
     #Step 5: Preform NVT equilibration (if files not available)
-    if not os.path.exists('prep/rep_0/nvt.gro') and not os.path.exists(f'prep/rep_{TREMD.n_rep-1}/nvt.gro'): #************ NEED TO ALL TEMPS ***********************
+    if not os.path.exists('prep/rep_0/nvt.gro') and not os.path.exists(f'prep/rep_{TREMD.n_rep-1}/nvt.gro'): #************ NEED TO ALL TEMPS ***********************Noahth
         # 5-1. Set up input files for all simulations
         if rank == 0:
             os.chdir('prep')
-            for i in range(TREMD.n_sim):
+            for i in range(TREMD.n_rep):
                 os.mkdir(f'rep_{i}')
                 MDP = TREMD.initialize_MDP(i, True, TREMD.mdp[1])
                 MDP.write(f'rep_{i}/nvt.mdp', skipempty=True)

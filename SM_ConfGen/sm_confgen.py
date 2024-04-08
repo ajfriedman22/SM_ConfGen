@@ -13,6 +13,8 @@ from openff.toolkit import Molecule, ForceField
 from openff.units import unit
 import numpy as np
 from openff.interchange import Interchange
+from os.path import dirname, join as joinpath
+DATADIR = joinpath(dirname(__file__), 'data')
 
 comm = MPI.COMM_WORLD
 rank = comm.Get_rank()
@@ -58,6 +60,7 @@ class SM_REMD:
 
     """
     
+
     def __init__(self, yaml_file, analysis=False):
         self.yaml = yaml_file
         self.set_params(analysis)
@@ -106,7 +109,6 @@ class SM_REMD:
         required_args = [
             "gmx_executable",
             "input_structure",
-            "mdp",
         ]
 
         for i in required_args:
@@ -118,13 +120,14 @@ class SM_REMD:
         # Step 3: Handle the optional YAML parameters
         # Key: Optional argument; Value: Default value
         optional_args = {
-            "mdp": ['data/default_mdp/em.mdp', 'data/default_mdp/nvt.mdp', 'data/default_mdp/npt.mdp', 'data/default_mdp/TREMD.mdp'],
-            "temp_range": [300, 306, 311.08, 316.23, 321.45, 326.74, 332.10, 337.54, 343.05, 348.63, 354.29, 360.02, 365.84, 371.73, 377.71, 383.76, 389.90, 396.12, 402.43, 408.83, 415.31, 421.88, 428.55, 435.30, 442.14, 449.07, 450],
+            "mdp": [f'{DATADIR}/default_mdp/em.mdp', f'{DATADIR}/default_mdp/nvt.mdp', f'{DATADIR}/default_mdp/npt.mdp', f'{DATADIR}/default_mdp/TREMD.mdp'],
+            "temp_range": np.array([300, 306, 311.08, 316.23, 321.45, 326.74, 332.10, 337.54, 343.05, 348.63, 354.29, 360.02, 365.84, 371.73, 377.71, 383.76, 389.90, 396.12, 402.43, 408.83, 415.31, 421.88, 428.55, 435.30, 442.14, 449.07, 450],dtype=float),
             "nst_sim": None,
             "dt": None,
             "replex_rate": 1000,
             "grompp_args": None,
             "runtime_args": None,
+            "water_model": 'TIP3P',
         }
 
         for i in optional_args:
@@ -139,7 +142,7 @@ class SM_REMD:
 
         # Step 4: Check if the parameters in the YAML file are well-defined
         #Check string inputs
-        params_str = ['gmx_executible', 'input_file']
+        params_str = ['gmx_executable', 'input_structure']
         for i in params_str:
             if type(getattr(self, i)) != str:
                 raise ParameterError(f"The parameter '{i}' should be a string.")
@@ -166,15 +169,15 @@ class SM_REMD:
         else:
             raise ParameterError('Input MDP file must either be list with len(mdp) == 4 or str')
 
-        if not self.input_file.lower().endswith(('.pdb', '.sdf')):
-            if os.path.exists(self.input_file + '.pdb'):
-                self.input_file = self.input_file + '.pdb'
-            elif os.path.exists(self.input_file + '.sdf'):
-                self.input_file = self.input_file + '.sdf'
+        if not self.input_structure.lower().endswith(('.pdb', '.sdf')):
+            if os.path.exists(self.input_structure + '.pdb'):
+                self.input_structure = self.input_structure + '.pdb'
+            elif os.path.exists(self.input_structure + '.sdf'):
+                self.input_structure = self.input_structure + '.sdf'
             else:
-                raise ParameterError(f'{self.input_file} file does not exsist')
-        elif not os.path.exists(self.input_file):
-            raise ParameterError(f'{self.input_file} file does not exsist')
+                raise ParameterError(f'{self.input_structure} file does not exsist')
+        elif not os.path.exists(self.input_structure):
+            raise ParameterError(f'{self.input_structure} file does not exsist')
         
         #Check that temperature range are integers are 
         if not all(isinstance(x, float) for x in self.temp_range) and not all(isinstance(x, int) for x in self.temp_range):
@@ -186,14 +189,18 @@ class SM_REMD:
         #Check simulation parameters
         float_or_int_params = ['nst_sim', 'dt', 'replex_rate']
         for i in float_or_int_params:
-            if type(getattr(self, i)) != int and type(getattr(self, i)) != float and type(getattr(self, i)) != None:
-                raise ParameterError(f"The parameter '{i}' should be an integer or float.")
+            if type(getattr(self, i)) != int and type(getattr(self, i)) != float and getattr(self, i) != None:
+                raise ParameterError(f"The parameter '{i}' should be an integer or float not {type(getattr(self, i))}.")
         
         #Check that option input args are formatted correctly
         params_dict = ['grompp_args', 'runtime_args']
         for i in params_dict:
             if getattr(self, i) is not None and not isinstance(getattr(self, i), dict):
                 raise ParameterError(f"The parameter '{i}' should be a dictionary.")
+        
+        #Check that water model is suported
+        if self.water_model != 'TIP3P':
+            raise ParameterError(f'Water model {self.water_model} is not supported only TIP3P is an acceptable input')
         
         # Step 5: Read in and check parameters from the MDP template
         self.template = gmx_parser.MDP(self.mdp[-1])
@@ -237,13 +244,14 @@ class SM_REMD:
         params_analysis : bool, optional
             If True, additional parameters related to data analysis will be printed. Default is False.
         """
-        print("Important parameters of EXEE")
+        print("Important parameters of ConfGen")
         print("============================")
         print(f"Python version: {sys.version}")
         print(f"GROMACS executable: {self.gmx_path}")  # we print the full path here
         print(f"GROMACS version: {self.gmx_version}")
         #print(f"SM ConfGen version: {SM_ConfGen.__version__}")
-        print(f'Simulation inputs: {self.input_file}, {self.mdp}')
+        print(f'Simulation Input Structure: {self.input_structure}')
+        print(f'Simulation MDP Files: {self.mdp}')
         print(f"Number of replicas: {self.n_rep}")
         print(f"Temperatures for Replicas: {self.temp_range}")
         print(f"Length of each replica: {self.dt * self.nst_sim / 1000} ns")
@@ -284,23 +292,56 @@ class SM_REMD:
         Prepares the system files for all replicate simulations
 
         """
-        #Create interchange object
-        mol = Molecule.from_file(self.input_file)
+        # Create interchange object
+        mol = Molecule.from_file(self.input_structure)
         sage = ForceField("openff-2.0.0.offxml")
         cubic_box = unit.Quantity(30 * np.eye(3), unit.angstrom)
         interchange = Interchange.from_smirnoff(topology=[mol], force_field=sage, box=cubic_box)
 
-        #Eport topology and coordinates
+        # Export topology and coordinates
         interchange.to_gro('prep/conf.gro')
-        interchange.to_top('prep/topol.top')
+        interchange.to_top('prep/init-topol.top')
 
-        #Add water and ion atom types from data
+        #Get water parameters depending on the water model
+        if self.water_model == 'TIP3P':
+            file_path_water = f'{DATADIR}\tip3p_ions.itp'
 
-        #Add water and ion molecule types from data
-
-        #Add position restraint section to topology
+        # Edit topology to add necessary elements
+        init_topology = open('prep/init-topol.top', 'r').readlines()
+        topology = open('prep/topol.top', 'w')
+        sect = None
+        for line in init_topology:
+            str_line = line.split(' ')
+            while '' in str_line: str_line.remove('')
+            if sect == 'atomtypes' and len(str_line) == 1: # Add water and ion atom types from data
+                topology.write('Na          11      22.99    0.0000  A   2.43928e-01  3.65846e-02\nCl          17      35.45    0.0000  A   4.47766e-01  1.48913e-01\nOW           8      16.00    0.0000  A   3.15061e-01  6.36386e-01\nHW           1       1.008   0.0000  A   0.00000e+00  0.00000e+00\n')
+                topology.write(line)
+                sect = None
+            elif sect == 'dihedrals' and len(str_line) == 1: # Add position restraint section to topology
+                topology.write('; Include Position restraint file\n#ifdef POSRES\n#include "posre.itp"\n#endif\n')
+                topology.write(line)
+                sect = None
+            elif sect == 'excl' and len(str_line) == 1:
+                topology.write(f'#include "{file_path_water}"\n') # Add water and ion molecule types from data
+                topology.write(line)
+                sect = None
+            else:
+                topology.write(line)
+            
+            # Determine section
+            if 'atomtypes' in line:
+                sect = 'atomtypes'
+            elif 'dihedrals' in line:
+                sect = 'dihedrals'
+            elif 'exclusions' in line:
+                sect = 'excl'        
+        topology.close()
 
         #Create position restraints file
+        create_posre = [self.gmx_executable, 'genrestr', '-f', 'prep/conf.gro']
+        returncode, stdout, stderr = utils.run_gmx_cmd(create_posre, '4\n')
+        if returncode != 0:
+            print(f'Error (return code: {returncode}):\n{stderr}')
 
     def solvate_system(self):
         """
@@ -308,19 +349,19 @@ class SM_REMD:
 
         """
         #Create Box
-        create_box = []
+        create_box = [self.gmx_executable, 'editconf', '-f', 'prep/conf.gro', '-o', 'prep/box.gro', '-bt', 'dodecahedron', '-d', '1']
         returncode, stdout, stderr = utils.run_gmx_cmd(create_box)
         if returncode != 0:
             print(f'Error (return code: {returncode}):\n{stderr}')
 
         #Solvate Box
-        solv_box = []
+        solv_box = [self.gmx_executable, 'solvate', '-cp', 'prep/box.gro', '-p', 'prep/topol.top', '-o', 'prep/solv.gro', '-cs']
         returncode, stdout, stderr = utils.run_gmx_cmd(solv_box)
         if returncode != 0:
             print(f'Error (return code: {returncode}):\n{stderr}')
         
         #Add neuralizing ions
-        neutral_box = []
+        neutral_box = [self.gmx_executable, 'grompp', '-f', f'{DATADIR}/default_mdp/ions.mdp', '-c', 'prep/solv.gro', '-p', 'topol.top', '-o', 'prep/ions.tpr']
         # Add additional arguments if any
         if self.grompp_args is not None:
             # Turn the dictionary into a list with the keys alternating with values
@@ -329,6 +370,10 @@ class SM_REMD:
         returncode, stdout, stderr = utils.run_gmx_cmd(neutral_box)
         if returncode != 0:
             print(f'Error (return code: {returncode}):\n{stderr}')
+        neutral_run = [self.gmx_executable, 'genion', '-s', 'prep/ions.tpr', '-o', 'prep/ions.gro', '-p', '-prep/topol.top', '-pname', 'NA', '-nname', 'CL', '-conc', '0.15', '-neutral']
+        returncode, stdout, stderr = utils.run_gmx_cmd(neutral_run, '4\n')
+        if returncode != 0:
+            print(f'Error (return code: {returncode}):\n{stderr}')       
 
     def run_grompp(self, step):
         """
