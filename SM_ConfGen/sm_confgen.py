@@ -304,7 +304,7 @@ class SM_REMD:
 
         #Get water parameters depending on the water model
         if self.water_model == 'TIP3P':
-            file_path_water = f'{DATADIR}\tip3p_ions.itp'
+            file_path_water = f'{DATADIR}/tip3p_ions.itp'
 
         # Edit topology to add necessary elements
         init_topology = open('prep/init-topol.top', 'r').readlines()
@@ -338,8 +338,8 @@ class SM_REMD:
         topology.close()
 
         #Create position restraints file
-        create_posre = [self.gmx_executable, 'genrestr', '-f', 'prep/conf.gro']
-        returncode, stdout, stderr = utils.run_gmx_cmd(create_posre, '4\n')
+        create_posre = [self.gmx_executable, 'genrestr', '-f', 'prep/conf.gro', '-o', 'prep/posre.itp']
+        returncode, stdout, stderr = utils.run_gmx_cmd(create_posre, '1\n')
         if returncode != 0:
             print(f'Error (return code: {returncode}):\n{stderr}')
 
@@ -361,7 +361,7 @@ class SM_REMD:
             print(f'Error (return code: {returncode}):\n{stderr}')
         
         #Add neuralizing ions
-        neutral_box = [self.gmx_executable, 'grompp', '-f', f'{DATADIR}/default_mdp/ions.mdp', '-c', 'prep/solv.gro', '-p', 'topol.top', '-o', 'prep/ions.tpr']
+        neutral_box = [self.gmx_executable, 'grompp', '-f', f'{DATADIR}/default_mdp/ions.mdp', '-c', 'prep/solv.gro', '-p', 'prep/topol.top', '-o', 'prep/ions.tpr']
         # Add additional arguments if any
         if self.grompp_args is not None:
             # Turn the dictionary into a list with the keys alternating with values
@@ -370,10 +370,14 @@ class SM_REMD:
         returncode, stdout, stderr = utils.run_gmx_cmd(neutral_box)
         if returncode != 0:
             print(f'Error (return code: {returncode}):\n{stderr}')
-        neutral_run = [self.gmx_executable, 'genion', '-s', 'prep/ions.tpr', '-o', 'prep/ions.gro', '-p', '-prep/topol.top', '-pname', 'NA', '-nname', 'CL', '-conc', '0.15', '-neutral']
+        neutral_run = [self.gmx_executable, 'genion', '-s', 'prep/ions.tpr', '-o', 'prep/ions.gro', '-p', 'prep/topol.top', '-pname', 'NA', '-nname', 'CL', '-conc', '0.15', '-neutral']
         returncode, stdout, stderr = utils.run_gmx_cmd(neutral_run, '4\n')
         if returncode != 0:
-            print(f'Error (return code: {returncode}):\n{stderr}')       
+            print(f'Error (return code: {returncode}):\n{stderr}')   
+
+        #Check that files generated properly
+        if not os.path.exists('prep/ions.gro'):
+            raise Exception('Error is System Solvation!')
 
     def run_grompp(self, step):
         """
