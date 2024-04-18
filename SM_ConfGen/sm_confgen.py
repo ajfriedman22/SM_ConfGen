@@ -359,7 +359,7 @@ class SM_REMD:
         returncode, stdout, stderr = utils.run_gmx_cmd(solv_box)
         if returncode != 0:
             print(f'Error (return code: {returncode}):\n{stderr}')
-        
+
         #Add neuralizing ions
         neutral_box = [self.gmx_executable, 'grompp', '-f', f'{DATADIR}/default_mdp/ions.mdp', '-c', 'prep/solv.gro', '-p', 'prep/topol.top', '-o', 'prep/ions.tpr']
         # Add additional arguments if any
@@ -397,7 +397,7 @@ class SM_REMD:
 
             # Input Files
             mdp = self.mdp[0]
-            gro = 'prep/conf.gro'
+            gro = 'prep/ions.gro'
             output_base = 'prep/min'
 
             # Add input file arugments
@@ -419,28 +419,33 @@ class SM_REMD:
             if returncode != 0:
                 print(f'Error on rank {rank} (return code: {returncode}):\n{stderr}')
         else:
-            for i in range(self.n_sim):
+            for i in range(self.n_rep):
                 arguments = [self.gmx_executable, 'grompp']
 
                 # Input files
                 if step == 'NVT':
                     mdp = f'prep/rep_{i}/nvt.mdp'
                     gro = 'prep/min.gro'
+                    restr = 'prep/min.gro'
                     cpt = None
                     output_base = f'prep/rep_{i}/nvt'
                 elif step == 'NPT':
                     mdp = f'prep/rep_{i}/npt.mdp'
                     gro = f'prep/rep_{i}/nvt.gro'
+                    restr = f'prep/rep_{i}/nvt.gro'
                     cpt = f'prep/rep_{i}/nvt.cpt'
                     output_base = f'prep/rep_{i}/npt'
                 else:
                     mdp = f'rep_{i}/md.mdp'
                     gro = f'prep/rep_{i}/npt.gro'
+                    restr = None
                     cpt = f'prep/rep_{i}/npt.cpt'
                     output_base = f'rep_{i}/md'
 
                 # Add input file arguments
                 arguments.extend(['-f', mdp, '-c', gro, '-p', top])
+                if restr != None:
+                    arguments.extend(['-r', restr])
                 if cpt != None:
                     arguments.extend(['-t', cpt])
 
@@ -459,10 +464,10 @@ class SM_REMD:
                 args_list.append(arguments)
 
             # Run the GROMACS grompp commands in parallel
-            returncode = None  # Initialize as None for all ranks (necessary for the case when -np > n_sim, which is rare)
+            returncode = None  # Initialize as None for all ranks (necessary for the case when -np > n_rep, which is rare)
             if rank == 0:
                 print('Generating TPR files ...')
-            if rank < self.n_sim:
+            if rank < self.n_rep:
                 returncode, stdout, stderr = utils.run_gmx_cmd(args_list[rank])
                 if returncode != 0:
                     print(f'Error on rank {rank} (return code: {returncode}):\n{stderr}')
@@ -473,7 +478,7 @@ class SM_REMD:
             if rank == 0:
                 # Filter out None values which represent ranks that did not execute the command
                 code_list = [code for code in code_list if code is not None]
-                if code_list != [0] * self.n_sim:
+                if code_list != [0] * self.n_rep:
                     MPI.COMM_WORLD.Abort(1)   # Doesn't matter what non-zero returncode we put here as the code from GROMACS will be printed before this point anyway.  # noqa: E501
 
     def run_mdrun(self, step):
@@ -491,11 +496,11 @@ class SM_REMD:
         # Add input file arguments
         arguments.extend(['-deffnm'])
         if step == 'EM':
-            arguments.extend('min')
+            arguments.extend(['min'])
         elif step == 'NVT':
-            arguments.extend('nvt')
+            arguments.extend(['nvt'])
         else:
-            arguments.extend('npt')
+            arguments.extend(['npt'])
 
         if self.runtime_args is not None:
             # Turn the dictionary into a list with the keys alternating with values
@@ -509,21 +514,14 @@ class SM_REMD:
                 print(f'Error (return code: {returncode}):\n{stderr}')
         else:
             # Run the GROMACS mdrun commands in parallel
-            returncode = None  # Initialize as None for all ranks (necessary for the case when -np > n_sim, which is rare)
+            returncode = None  # Initialize as None for all ranks (necessary for the case when -np > n_rep, which is rare)
             if rank == 0:
                 print(f'Running {step} equilibration simulations ...')
-            if rank < self.n_sim:
+            if rank < self.n_rep:
                 os.chdir(f'rep_{rank}/')
                 returncode, stdout, stderr = utils.run_gmx_cmd(arguments)
                 if returncode != 0:
                     print(f'Error on rank {rank} (return code: {returncode}):\n{stderr}')
-                if self.rm_cpt is True:
-                    # if the simulation went wrong, there would be no checkpoint file
-                    try:
-                        os.remove('state.cpt')
-                    except Exception:
-                        print('\n--------------------------------------------------------------------------\n')
-                        MPI.COMM_WORLD.Abort(1)
                 os.chdir('../../')
 
             # gather return codes at rank 0
@@ -532,39 +530,9 @@ class SM_REMD:
             if rank == 0:
                 # Filter out None values which represent ranks that did not execute the command
                 code_list = [code for code in code_list if code is not None]
-                if code_list != [0] * self.n_sim:
+                if code_list != [0] * self.n_rep:
                     MPI.COMM_WORLD.Abort(1)   # Doesn't matter what non-zero returncode we put here as the code from GROMACS will be printed before this point anyway.  # noqa: E501
         os.chdir('../')
-    
-    def run_TREMD(self, restart:bool):
-        """
-        Run temperature replica exchange molecular dynamics simulations
-
-        Parameters
-        ----------
-        restart : bool
-            Is this simulation restarting from checkpoint?
-        """
-        arguments = ['mpirun', '-np', self.n_rep, self.gmx_executable, 'mdrun', '-deffnm', 'md', '-multidir']
-
-        #Add multiple directories for replica exchange run
-        for i in range(self.n_rep):
-            arguments.append(f'rep_{i}')
-        
-        arguments.append(['-replex', self.replex_rate])
-
-        if self.runtime_args is not None:
-            # Turn the dictionary into a list with the keys alternating with values
-            add_args = [elem for pair in self.runtime_args.items() for elem in pair]
-            arguments.extend(add_args)
-        
-        if restart:
-            arguments.append(['-cpi', 'md'])
-
-        #Run Simulation
-        returncode, stdout, stderr = utils.run_gmx_cmd(arguments)
-        if returncode != 0:
-                print(f'Error (return code: {returncode}):\n{stderr}')
 
     def process_traj(self, ):
         """

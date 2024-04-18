@@ -1,5 +1,6 @@
 import subprocess
 import sys
+from mpi4py import MPI
 
 class Logger:
     """
@@ -79,6 +80,7 @@ def run_gmx_cmd(arguments, prompt_input=None):
         return_code, stdout, stderr = e.returncode, None, e.stderr
 
     return return_code, stdout, stderr
+
 def _autoconvert(s):
     """
     Converts input to a numerical type if possible. Used for the MDP parser.

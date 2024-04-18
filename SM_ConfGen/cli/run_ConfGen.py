@@ -1,16 +1,15 @@
-import time
-import copy
-import shutil
-import traceback
+import os
+from multiprocessing import Process
+from subprocess import Popen
+from SM_ConfGen.sm_confgen import SM_REMD
 import argparse
 import numpy as np
-from mpi4py import MPI
 from datetime import datetime
+import time
 import sys
-import os
 
-from SM_ConfGen.utils import utils
-from SM_ConfGen.sm_confgen import SM_REMD
+def f(cmd):
+    os.system(cmd) 
 
 def initialize(args):
     parser = argparse.ArgumentParser(
@@ -39,82 +38,29 @@ def main():
     t1 = time.time()
     args = initialize(sys.argv[1:])
 
-    sys.stdout = utils.Logger(logfile=args.output)
-    sys.stderr = utils.Logger(logfile=args.output)
-
-    # Step 1: Set up MPI rank and instantiate ReplicaExchangeEE to set up REXEE parameters
-    comm = MPI.COMM_WORLD
-    rank = comm.Get_rank()  # Note that this is a GLOBAL variable
-
-    if rank == 0:
-        print(f'Current time: {datetime.now().strftime("%d/%m/%Y %H:%M:%S")}')
-        print(f'Command line: {" ".join(sys.argv)}\n')
-
     TREMD = SM_REMD(args.yaml)
 
-    if rank == 0:
-        # Print out simulation parameters
-        TREMD.print_params()
+    arguments = ['mpirun', '-np', str(TREMD.n_rep), TREMD.gmx_executable, 'mdrun', '-deffnm', 'md', '-multidir']
 
-        # Print out warnings and fail if needed
-        for i in TREMD.warnings:
-            print(f'\n{i}\n')
+    #Add multiple directories for replica exchange run
+    for i in range(TREMD.n_rep):
+        arguments.append(f'rep_{i}')
+        
+    arguments.append('-replex')
+    arguments.append(str(TREMD.replex_rate))
 
-        if len(TREMD.warnings) > args.maxwarn:
-            print(f"The execution failed due to warning(s) about parameter spcificaiton. Check the warnings, or consider setting maxwarn in the input YAML file if you find them harmless.")  # noqa: E501, F541
-            comm.Abort(101)
+    if TREMD.runtime_args is not None:
+        # Turn the dictionary into a list with the keys alternating with values
+        add_args = [elem for pair in TREMD.runtime_args.items() for elem in pair]
+        arguments.extend(add_args)
     
-    #Step 2: Parameterize System (if files not available)
-    if not os.path.exists('prep/conf.gro') or not os.path.exists('prep/topol.top'):
-        if not os.path.exists('prep'):
-            os.mkdir('prep')
-        TREMD.parameterize_system()
-    
-    #Step 3: Solvate and Neutralize System (if files not available)
-    if not os.path.exists('prep/ions.gro'):
-        TREMD.solvate_system()
-    
-    #Step 4: Perform Energy Minimization (if files not available)
-    if not os.path.exists('prep/min.gro'):
-        TREMD.run_grompp('EM')
+    restart = True
+    for r in range(TREMD.n_rep):
+        if not os.path.exists(f'rep_{r}/md.cpt'): #Use checkpoint if present for all replicas
+            restart = False
 
-    #Step 5: Preform NVT equilibration (if files not available)
-    if not os.path.exists('prep/rep_0/nvt.gro') and not os.path.exists(f'prep/rep_{TREMD.n_rep-1}/nvt.gro'): #************ NEED TO ALL TEMPS ***********************Noahth
-        # 5-1. Set up input files for all simulations
-        if rank == 0:
-            os.chdir('prep')
-            for i in range(TREMD.n_rep):
-                os.mkdir(f'rep_{i}')
-                MDP = TREMD.initialize_MDP(i, True, TREMD.mdp[1])
-                MDP.write(f'rep_{i}/nvt.mdp', skipempty=True)
-            os.chdir('../')
+    if restart:
+        arguments.append(['-cpi', 'md'])
 
-        # 5-2. Run the first set of simulations
-        TREMD.run_grompp('NVT')
-        TREMD.run_mdrun('NVT')
-    
-    #Step 6: Preform NPT equilibration (if files not available)
-    if not os.path.exists('prep/rep_0/npt.gro') and not os.path.exists(f'prep/rep_{TREMD.n_rep-1}/npt.gro'):
-        # 6-1. Set up input files for all simulations
-        if rank == 0:
-            for r in range(TREMD.n_rep):
-                MDP = TREMD.initialize_MDP(r, True, TREMD.mdp[2])
-                MDP.write(f'rep_{i}/npt.mdp', skipempty=True)
-
-        # 6-2. Run the first set of simulations
-        TREMD.run_grompp('NPT')
-        TREMD.run_mdrun('NPT')
-    
-    #Step 7: Run TREMD (check for chechpoint)
-    check_pt = True
-    for r in range(TREMD.n_rep): #Use checkpoint if present for all replicas
-        if not os.path.exists(f'rep_{r}/md.cpt'):
-            check_pt = False
-            break
-    if not check_pt:
-        for r in range(TREMD.n_rep):
-            os.mkdir(f'rep_{r}')
-        TREMD.run_grompp('MD')
-        TREMD.run_TREMD(restart=False)
-    else:
-        TREMD.run_TREMD(restart=True)
+    #Run Simulation
+    process = Popen(arguments)
