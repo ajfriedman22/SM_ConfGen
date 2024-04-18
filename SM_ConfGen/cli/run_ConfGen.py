@@ -1,10 +1,7 @@
 import os
-from multiprocessing import Process
 from subprocess import Popen
 from SM_ConfGen.sm_confgen import SM_REMD
 import argparse
-import numpy as np
-from datetime import datetime
 import time
 import sys
 
