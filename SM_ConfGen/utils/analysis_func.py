@@ -217,20 +217,16 @@ def clust_conf(traj, per, file_name):
     link = linkage(reduced_distances, method='single') #The hierarchical clustering encoded as a matrix
     frame_list = dendrogram(link, no_labels=False, count_sort='descendent')['leaves']
     frame_cat = dendrogram(link, no_labels=False, count_sort='descendent')['color_list']
-
     #Keep only one file per cluster
+    uniqe_cat = list(set(frame_cat))#unique categories
     frames_sep = [] #List of frames that are unique and will be processed
-    cat = frame_cat[0]
-    frames_indv = [frame_list[0]]
-    for frame in range(1, len(frame_list)-1):
-        if frame_cat[frame] == cat:
-            frames_indv.append(frame_list[frame])
-        else:
-            frames_sep.append(frames_indv)
-            cat = frame_cat[frame]
-            frames_indv = [frame_list[frame]]
-    frames_sep.append(frames_indv)
-    
+    for cat in uniqe_cat:
+        frames_indv = []
+        for idx in frame_cat.index(cat):
+            frames_indv.append(frame_list[idx])
+        frames_sep.append(frames_indv)
+    print(len(frames_sep))
+
     #Analyze each cluster (determine centroid and plot Intercluster RMSD)
     frames_unique, per_unique= compare_within_cluster(traj, frames_sep, per, distances[0], file_name)
 
@@ -247,6 +243,7 @@ def compare_within_cluster(traj, cluster_frames, per, rmsd_all, file_name):
         for i in range(cluster_traj.n_frames):
             rmsd_clust[i] = md.rmsd(cluster_traj, cluster_traj, i, atom_indices=cluster_traj.topology.select('element != H'))
             rmsd_clust_mean[i] = np.mean(rmsd_clust[i])
+        print(rmsd_clust_mean)
         min_index = np.argmin(rmsd_clust_mean)
         centroid_frame = frames[min_index]
         frames_unique.append(centroid_frame)
@@ -268,10 +265,13 @@ def compare_within_cluster(traj, cluster_frames, per, rmsd_all, file_name):
 def process_confs(raw_traj, frames, per, file_name, id_type='Conformer'):
     per_non_zero = np.array(per[per!=0], dtype=float)
     ordered_index = per_non_zero.argsort()
-    per_ordered, frames_ordered = [], []
+    per_ordered, frames_ordered, conf_ordered = [], [], []
+    conf = np.linspace(1, len(per_non_zero), num=len(per_non_zero))
     for idx in reversed(ordered_index):
         per_ordered.append(per[idx])
         frames_ordered.append(frames[idx])
+        conf_ordered.append(conf[idx])
+
     #Save PDB
     traj = raw_traj.slice(frames_ordered)
     traj.save_pdb(f'{file_name}.pdb')
@@ -283,7 +283,7 @@ def process_confs(raw_traj, frames, per, file_name, id_type='Conformer'):
     rg = md.compute_rg(traj)
 
     #Save CSV
-    df_clust = pd.DataFrame({f'{id_type} ID': np.linspace(1, len(per), num=len(per), dtype=int), 'Occupancy': per_ordered, 'Relative FE': rel_ener})
+    df_clust = pd.DataFrame({f'{id_type} ID': np.linspace(1, len(per_ordered), num=len(per_ordered), dtype=int), 'Occupancy': per_ordered, 'Relative FE': rel_ener})
     df_clust['Radius of Gyration'] = rg
     df_clust.to_csv(f'analysis/{file_name}.csv')
 
@@ -320,7 +320,7 @@ def process_confs(raw_traj, frames, per, file_name, id_type='Conformer'):
     plt.savefig(f'analysis/{file_name}_rg_hist.png') 
     plt.close()
 
-    return ordered_index+1, per.non_zero()[0], traj
+    return conf_ordered, traj
 
 def get_rel_ener(per_all):
     from scipy.constants import k, Avogadro

@@ -634,18 +634,12 @@ class SM_REMD:
         per = 100*(count/traj.n_frames)
 
         # Step 5: Print conformer angle combinations, percent ligand is in conformation, and frame in which the ligand is in that conformation
-        conformer_list, index_keep, traj_confs = af.process_confs(traj, frame_select, per, f'{self.output_name}_dihe')
-        df = pd.DataFrame({'Conformer ID': conformer_list})
-        n = 1
-        for i in range(num_dihe):
-            if i in index_keep:
-                df[f'Max for d{n}'] = conformer[:,i]
-                n+=1
-        df.to_csv(f'analysis/{self.output_name}_dihe_def.csv')
-        
+        print(sum(per[per!=0]))
+        conformer_list, traj_confs = af.process_confs(traj, frame_select, per, f'{self.output_name}_dihe')
 
         #Cluster conformers
         frames_dihe_clust, per_dihe_clust, group = af.clust_conf(traj_confs, per, f'{self.output_name}_dihe_clust')
+        print(sum(per_dihe_clust))
         cluster_list, traj_clust_confs = af.process_confs(traj_confs, frames_dihe_clust, per_dihe_clust, f'{self.output_name}_dihe_clust', 'Cluster')
         df = pd.DataFrame({'Cluster ID': cluster_list, 'Grouped Confs': group})
         df.to_csv(f'analysis/{self.output_name}_dihe_clust_def.csv')
