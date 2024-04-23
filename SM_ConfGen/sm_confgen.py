@@ -14,6 +14,8 @@ from openff.units import unit
 import numpy as np
 from openff.interchange import Interchange
 from os.path import dirname, join as joinpath
+import mdtraj as md
+import pandas as pd
 DATADIR = joinpath(dirname(__file__), 'data')
 
 comm = MPI.COMM_WORLD
@@ -109,6 +111,7 @@ class SM_REMD:
         required_args = [
             "gmx_executable",
             "input_structure",
+            "output_name"
         ]
 
         for i in required_args:
@@ -142,7 +145,7 @@ class SM_REMD:
 
         # Step 4: Check if the parameters in the YAML file are well-defined
         #Check string inputs
-        params_str = ['gmx_executable', 'input_structure']
+        params_str = ['gmx_executable', 'input_structure', 'output_name']
         for i in params_str:
             if type(getattr(self, i)) != str:
                 raise ParameterError(f"The parameter '{i}' should be a string.")
@@ -534,41 +537,119 @@ class SM_REMD:
                     MPI.COMM_WORLD.Abort(1)   # Doesn't matter what non-zero returncode we put here as the code from GROMACS will be printed before this point anyway.  # noqa: E501
         os.chdir('../')
 
-    def process_traj(self, ):
+    def process_traj(self):
         """
         Center trajectory for analysis
 
         """
-        #Check that trajectory is present to process
-        if not os.path.exists('rep_0/md.xtc'):
-            raise Exception('Error: Trajectory rep_0/md.xtc does not exsist')
-        if not os.path.exists('rep_0/md.gro'):
-            raise Exception('Error: File rep_0/md.gro does not exsist')
-        
-        #Create analysis directory if not present
-        if not os.path.exists('analysis'):
-            os.mkdir('analysis')
+        # Check that trajectory is present to process
+        if not os.path.exists(f'rep_{rank}/md.xtc'):
+            raise Exception(f'Error: Trajectory rep_{rank}/md.xtc does not exsist')
+        if not os.path.exists(f'rep_{rank}/md.gro'):
+            raise Exception(f'Error: File rep_{rank}/md.gro does not exsist')
 
-        #Center trajectory
+        # Center trajectory
         arguments = [self.gmx_executable, 'trjconv', '-s', 'rep_0/md.tpr', '-f', 'rep_0/md.xtc', '-pbc', 'cluster', '-center', '-o', 'analysis/center.xtc']
-        returncode, stdout, stderr = utils.run_gmx_cmd(arguments, prompt_input=['', '\n', ])
+        returncode, stdout, stderr = utils.run_gmx_cmd(arguments, prompt_input='1\n1\n1\n')
         if returncode != 0:
             print(f'Error (return code: {returncode}):\n{stderr}')
         
-        #Create GRO File with just the ligand
+        # Create GRO File with just the ligand
         arguments = [self.gmx_executable, 'trjconv', '-s', 'rep_0/md.gro', '-f', 'rep_0/md.gro', '-o', 'analysis/md.gro']
-        returncode, stdout, stderr = utils.run_gmx_cmd(arguments, prompt_input=['', '\n'])
+        returncode, stdout, stderr = utils.run_gmx_cmd(arguments, prompt_input='1\n')
         if returncode != 0:
             print(f'Error (return code: {returncode}):\n{stderr}')
         
-    def compute_dihedral_peaks(self, ):
+    def compute_dihedral_peaks(self):
         """
-        
+        Compute the value for all unique ligand dihedrals to determine which are multi-modal
         """
-        #Get indices for all dihedrals in small molecule
-        define_dihedrals = af.define_dihedral('prep/topol.top')
-    
+        # Step 1: Get indices for all dihedrals in ligand
+        if rank == 0:
+            dihe_name, dihe_ind  = af.define_dihedral('prep/topol.top')
 
+        # Step 2: Compute the dihedral angles
+        if rank == 0:
+            traj = md.load('analysis/center.xtc', top='analysis/md.gro')
+            dihedral = md.compute_dihedrals(traj, indices=dihe_ind)
+            #Convert to degree
+            dihedral = dihedral*(180/np.pi)
+        
+        # Step 3: Determine which peaks are multimodal and save that info
+        if rank == 0 and not os.path.exists('analysis/dihedrals'):
+            os.mkdir('analysis/dihedrals')
+        # Determine indices for each rank
+        df_max = pd.DataFrame(columns=['Dihedral Name', 'Dihderal Atom Index 1', 'Dihderal Atom Index 2', 'Dihderal Atom Index 3', 'Dihderal Atom Index 4', 'Maxima'])
+        for i in range(len(dihe_name)):
+            maxima, dihe_dist = af.deter_multimodal(dihedral, i, dihe_name)
+            af.plot_torsion(dihe_dist, maxima, dihe_name[i])
+            #If multiple peaks add to dataframe
+            if len(maxima) > 1:
+                df = pd.DataFrame({'Dihedral Name': dihe_name[i], 'Dihderal Atom Index 1': dihe_ind[i][0], 'Dihderal Atom Index 2': dihe_ind[i][1], 'Dihderal Atom Index 3': dihe_ind[i][2], 'Dihderal Atom Index 4': dihe_ind[i][3], 'Maxima': maxima})
+                df_max = pd.concat([df_max, df])
+        df_max.to_csv('analysis/dihe_ind_max.csv')
+
+    def clust_dihedrals(self, ):
+        """
+        Determine which dihedral combinations are sampled and cluster conformers
+
+        """
+        from itertools import product
+
+        # Step 1: Load dihedral peaks and determine possible options
+        if rank == 0:
+            dihe_name, dihe_ind, max_values, peak_options = af.input_torsion()
+        
+        # Step 2: Compute dihedral angles for ligand
+        traj = md.load('analysis/center.xtc', top='analysis/md.gro')
+        dihedral = md.compute_dihedrals(traj, indices=dihe_ind)
+        dihedral = dihedral*(180/np.pi) #Convert to degree
+
+        # Step 3: Determine which dihderal peak is being sampled per frame
+        num_dihe = len(dihe_name)
+        dihe_peak_sampled = np.zeros((traj.n_frames, num_dihe))
+        for t in range(traj.n_frames):
+            for i in range(num_dihe):
+                max_value_i = np.array(max_values[i], dtype=float)
+                value = dihedral[t,i]
+                dihe_peak_sampled[t,i] = af.find_nearest(max_value_i, value)
+
+        # Step 4: Clasify conformers from possible combinations
+        #Name possible dihedral conformations
+        conf = list(product(*peak_options))
+        conformer = np.zeros((len(conf), len(conf[0])))
+        for c in range(len(conf)):
+            conf_c = conf[c]
+            conformer[c,:] = conf_c
+        
+        #Classify dihedrals into conformations
+        count = np.zeros(len(conformer))
+        frame_select = []
+        for t in range(traj.n_frames):
+            find_conf = (dihe_peak_sampled[t,:] == conformer).all(axis=1)
+            conf_idx = find_conf.nonzero()[0][0]
+            if count[conf_idx] == 0:
+                frame_select.append(t)    
+            count[conf_idx] += 1
+        per = 100*(count/traj.n_frames)
+
+        # Step 5: Print conformer angle combinations, percent ligand is in conformation, and frame in which the ligand is in that conformation
+        conformer_list, index_keep, traj_confs = af.process_confs(traj, frame_select, per, f'{self.output_name}_dihe')
+        df = pd.DataFrame({'Conformer ID': conformer_list})
+        n = 1
+        for i in range(num_dihe):
+            if i in index_keep:
+                df[f'Max for d{n}'] = conformer[:,i]
+                n+=1
+        df.to_csv(f'analysis/{self.output_name}_dihe_def.csv')
+        
+
+        #Cluster conformers
+        frames_dihe_clust, per_dihe_clust, group = af.clust_conf(traj_confs, per, f'{self.output_name}_dihe_clust')
+        cluster_list, traj_clust_confs = af.process_confs(traj_confs, frames_dihe_clust, per_dihe_clust, f'{self.output_name}_dihe_clust', 'Cluster')
+        df = pd.DataFrame({'Cluster ID': cluster_list, 'Grouped Confs': group})
+        df.to_csv(f'analysis/{self.output_name}_dihe_clust_def.csv')
+        
 
 if __name__ == "__main__":
     # Do something if this file is invoked on its own
