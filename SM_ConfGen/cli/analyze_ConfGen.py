@@ -10,7 +10,7 @@ from SM_ConfGen.sm_confgen import SM_REMD
 
 def initialize(args):
     parser = argparse.ArgumentParser(
-        description='This code runs a REXEE simulation given necessary inputs.')
+        description='This code analyzes the output from TREMD to generate conformers given necessary inputs.')
     parser.add_argument('-y',
                         '--yaml',
                         type=str,

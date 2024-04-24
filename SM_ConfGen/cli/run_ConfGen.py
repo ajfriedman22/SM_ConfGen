@@ -10,7 +10,7 @@ def f(cmd):
 
 def initialize(args):
     parser = argparse.ArgumentParser(
-        description='This code runs a REXEE simulation given necessary inputs.')
+        description='This code runs a runs a set of TREMD simulations given necessary inputs.')
     parser.add_argument('-y',
                         '--yaml',
                         type=str,

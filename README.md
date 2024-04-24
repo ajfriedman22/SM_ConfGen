@@ -7,6 +7,21 @@ Small Molecule Conformer Generation
 
 Small molecule conformer generation using TREMD
 
+### Installation
+'''
+git clone git@github.com:ajfriedman22/SM_ConfGen.git
+cd SM_ConfGen
+pip install .
+'''
+
+### Useage
+N = Number of temperature replicates specified. If the default temperatures are selected N=27.
+'''
+mpirun -np N prep_ConfGen -y params.yaml
+run_ConfGen -y params.yaml
+mpirun -np N analyze_ConfGen -y params.yaml
+'''
+
 ### Copyright
 
 Copyright (c) 2024, Anika Friedman

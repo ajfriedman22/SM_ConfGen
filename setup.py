@@ -72,6 +72,7 @@ setup(
     # Add entry points
     entry_points={
         'console_scripts':[
+            'prep_ConfGen = SM_ConfGen.cli.prep_ConfGen:main',
             'run_ConfGen = SM_ConfGen.cli.run_ConfGen:main',
             'analyze_ConfGen = SM_ConfGen.cli.analyze_ConfGen:main',
         ],
