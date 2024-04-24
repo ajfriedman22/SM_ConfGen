@@ -542,23 +542,25 @@ class SM_REMD:
         Center trajectory for analysis
 
         """
-        # Check that trajectory is present to process
-        if not os.path.exists(f'rep_{rank}/md.xtc'):
-            raise Exception(f'Error: Trajectory rep_{rank}/md.xtc does not exsist')
-        if not os.path.exists(f'rep_{rank}/md.gro'):
-            raise Exception(f'Error: File rep_{rank}/md.gro does not exsist')
+        if rank == 0:
+            # Check that trajectory is present to process
+            if not os.path.exists(f'rep_{rank}/md.xtc'):
+                raise Exception(f'Error: Trajectory rep_{rank}/md.xtc does not exsist')
+            if not os.path.exists(f'rep_{rank}/md.gro'):
+                raise Exception(f'Error: File rep_{rank}/md.gro does not exsist')
 
-        # Center trajectory
-        arguments = [self.gmx_executable, 'trjconv', '-s', 'rep_0/md.tpr', '-f', 'rep_0/md.xtc', '-pbc', 'cluster', '-center', '-o', 'analysis/center.xtc']
-        returncode, stdout, stderr = utils.run_gmx_cmd(arguments, prompt_input='1\n1\n1\n')
-        if returncode != 0:
-            print(f'Error (return code: {returncode}):\n{stderr}')
+        if rank == 0:
+            # Center trajectory
+            arguments = [self.gmx_executable, 'trjconv', '-s', 'rep_0/md.tpr', '-f', 'rep_0/md.xtc', '-pbc', 'cluster', '-center', '-o', 'analysis/center.xtc']
+            returncode, stdout, stderr = utils.run_gmx_cmd(arguments, prompt_input='1\n1\n1\n')
+            if returncode != 0:
+                print(f'Error (return code: {returncode}):\n{stderr}')
         
-        # Create GRO File with just the ligand
-        arguments = [self.gmx_executable, 'trjconv', '-s', 'rep_0/md.gro', '-f', 'rep_0/md.gro', '-o', 'analysis/md.gro']
-        returncode, stdout, stderr = utils.run_gmx_cmd(arguments, prompt_input='1\n')
-        if returncode != 0:
-            print(f'Error (return code: {returncode}):\n{stderr}')
+            # Create GRO File with just the ligand
+            arguments = [self.gmx_executable, 'trjconv', '-s', 'rep_0/md.gro', '-f', 'rep_0/md.gro', '-o', 'analysis/md.gro']
+            returncode, stdout, stderr = utils.run_gmx_cmd(arguments, prompt_input='1\n')
+            if returncode != 0:
+                print(f'Error (return code: {returncode}):\n{stderr}')
         
     def compute_dihedral_peaks(self):
         """
@@ -578,9 +580,11 @@ class SM_REMD:
         # Step 3: Determine which peaks are multimodal and save that info
         if rank == 0 and not os.path.exists('analysis/dihedrals'):
             os.mkdir('analysis/dihedrals')
+        
         # Determine indices for each rank
+        dihe_per_rank = len(dihe_name)/self.n_rep
         df_max = pd.DataFrame(columns=['Dihedral Name', 'Dihderal Atom Index 1', 'Dihderal Atom Index 2', 'Dihderal Atom Index 3', 'Dihderal Atom Index 4', 'Maxima'])
-        for i in range(len(dihe_name)):
+        for i in range(rank*dihe_per_rank, (rank+1)*dihe_per_rank):
             maxima, dihe_dist = af.deter_multimodal(dihedral, i, dihe_name)
             af.plot_torsion(dihe_dist, maxima, dihe_name[i])
             #If multiple peaks add to dataframe
@@ -589,61 +593,58 @@ class SM_REMD:
                 df_max = pd.concat([df_max, df])
         df_max.to_csv('analysis/dihe_ind_max.csv')
 
-    def clust_dihedrals(self, ):
+    def clust_dihedrals(self):
         """
         Determine which dihedral combinations are sampled and cluster conformers
 
         """
         from itertools import product
 
-        # Step 1: Load dihedral peaks and determine possible options
         if rank == 0:
+            # Step 1: Load dihedral peaks and determine possible options
             dihe_name, dihe_ind, max_values, peak_options = af.input_torsion()
         
-        # Step 2: Compute dihedral angles for ligand
-        traj = md.load('analysis/center.xtc', top='analysis/md.gro')
-        dihedral = md.compute_dihedrals(traj, indices=dihe_ind)
-        dihedral = dihedral*(180/np.pi) #Convert to degree
+            # Step 2: Compute dihedral angles for ligand
+            traj = md.load('analysis/center.xtc', top='analysis/md.gro')
+            dihedral = md.compute_dihedrals(traj, indices=dihe_ind)
+            dihedral = dihedral*(180/np.pi) #Convert to degree
 
-        # Step 3: Determine which dihderal peak is being sampled per frame
-        num_dihe = len(dihe_name)
-        dihe_peak_sampled = np.zeros((traj.n_frames, num_dihe))
-        for t in range(traj.n_frames):
-            for i in range(num_dihe):
-                max_value_i = np.array(max_values[i], dtype=float)
-                value = dihedral[t,i]
-                dihe_peak_sampled[t,i] = af.find_nearest(max_value_i, value)
+            # Step 3: Determine which dihderal peak is being sampled per frame
+            num_dihe = len(dihe_name)
+            dihe_peak_sampled = np.zeros((traj.n_frames, num_dihe))
+            for t in range(traj.n_frames):
+                for i in range(num_dihe):
+                    max_value_i = np.array(max_values[i], dtype=float)
+                    value = dihedral[t,i]
+                    dihe_peak_sampled[t,i] = af.find_nearest(max_value_i, value)
 
-        # Step 4: Clasify conformers from possible combinations
-        #Name possible dihedral conformations
-        conf = list(product(*peak_options))
-        conformer = np.zeros((len(conf), len(conf[0])))
-        for c in range(len(conf)):
-            conf_c = conf[c]
-            conformer[c,:] = conf_c
+            # Step 4: Clasify conformers from possible combinations
+            #Name possible dihedral conformations
+            conf = list(product(*peak_options))
+            conformer = np.zeros((len(conf), len(conf[0])))
+            for c in range(len(conf)):
+                conf_c = conf[c]
+                conformer[c,:] = conf_c
         
-        #Classify dihedrals into conformations
-        count = np.zeros(len(conformer))
-        frame_select = []
-        for t in range(traj.n_frames):
-            find_conf = (dihe_peak_sampled[t,:] == conformer).all(axis=1)
-            conf_idx = find_conf.nonzero()[0][0]
-            if count[conf_idx] == 0:
-                frame_select.append(t)    
-            count[conf_idx] += 1
-        per = 100*(count/traj.n_frames)
+            #Classify dihedrals into conformations
+            count = np.zeros(len(conformer))
+            frame_select = []
+            for t in range(traj.n_frames):
+                find_conf = (dihe_peak_sampled[t,:] == conformer).all(axis=1)
+                conf_idx = find_conf.nonzero()[0][0]
+                if count[conf_idx] == 0:
+                    frame_select.append(t)    
+                count[conf_idx] += 1
+            per = 100*(count/traj.n_frames)
 
-        # Step 5: Print conformer angle combinations, percent ligand is in conformation, and frame in which the ligand is in that conformation
-        print(sum(per[per!=0]))
-        conformer_list, traj_confs = af.process_confs(traj, frame_select, per, f'{self.output_name}_dihe')
+            # Step 5: Print conformer angle combinations, percent ligand is in conformation, and frame in which the ligand is in that conformation
+            conformer_list, traj_confs = af.process_confs(traj, frame_select, per, f'{self.output_name}_dihe')
 
-        #Cluster conformers
-        frames_dihe_clust, per_dihe_clust, group = af.clust_conf(traj_confs, per, f'{self.output_name}_dihe_clust')
-        print(sum(per_dihe_clust))
-        cluster_list, traj_clust_confs = af.process_confs(traj_confs, frames_dihe_clust, per_dihe_clust, f'{self.output_name}_dihe_clust', 'Cluster')
-        df = pd.DataFrame({'Cluster ID': cluster_list, 'Grouped Confs': group})
-        df.to_csv(f'analysis/{self.output_name}_dihe_clust_def.csv')
-        
+            #Cluster conformers
+            frames_dihe_clust, per_dihe_clust, group = af.clust_conf(traj_confs, per, f'{self.output_name}_dihe_clust')
+            cluster_list, traj_clust_confs = af.process_confs(traj_confs, frames_dihe_clust, per_dihe_clust, f'{self.output_name}_dihe_clust', 'Cluster')
+            df = pd.DataFrame({'Cluster ID': cluster_list, 'Grouped Confs': group})
+            df.to_csv(f'analysis/{self.output_name}_dihe_clust_def.csv')
 
 if __name__ == "__main__":
     # Do something if this file is invoked on its own

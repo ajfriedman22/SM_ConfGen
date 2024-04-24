@@ -48,15 +48,18 @@ def main():
     # Step 2: Create analysis directory if not present
     if rank == 0 and not os.path.exists('analysis'):
         os.mkdir('analysis')
-    
+
     # Step 1: Process trajectory for lowest temperature replicate
-    if rank == 0 and (not os.path.exists('analysis/center.xtc') or not os.path.exists('analysis/md.gro')):
+    if not os.path.exists('analysis/center.xtc') or not os.path.exists('analysis/md.gro'):
         TREMD.process_traj()
-    
+    # Synchronyzation point for all ranks
+    comm.barrier()
+
     #Step 2: Compute Dihedral Peaks
     if not os.path.exists('analysis/dihe_ind_max.csv'):
-        print('check')
         TREMD.compute_dihedral_peaks()
+    # Synchronyzation point for all ranks
+    comm.barrier()
 
     #Step 3: Determine sampled conformations and cluster
     TREMD.clust_dihedrals()
