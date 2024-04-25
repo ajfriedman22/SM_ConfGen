@@ -205,7 +205,6 @@ def find_nearest(array, value):
 def clust_conf(traj, per, file_name):
     from scipy.cluster.hierarchy import dendrogram, linkage
     from scipy.spatial.distance import squareform
-    
     #Compute pairwise RMSD
     distances = np.empty((traj.n_frames, traj.n_frames))
     for i in range(traj.n_frames):
@@ -217,19 +216,18 @@ def clust_conf(traj, per, file_name):
     link = linkage(reduced_distances, method='single') #The hierarchical clustering encoded as a matrix
     frame_list = dendrogram(link, no_labels=False, count_sort='descendent')['leaves']
     frame_cat = dendrogram(link, no_labels=False, count_sort='descendent')['color_list']
-    #Keep only one file per cluster
+    #Determine which frames fall in which cluster
     uniqe_cat = list(set(frame_cat))#unique categories
     frames_sep = [] #List of frames that are unique and will be processed
     for cat in uniqe_cat:
         frames_indv = []
-        for idx in frame_cat.index(cat):
-            frames_indv.append(frame_list[idx])
+        for i, frame in enumerate(frame_list[1:]):
+            if frame_cat[i] == cat:
+                frames_indv.append(frame)
         frames_sep.append(frames_indv)
-    print(len(frames_sep))
 
     #Analyze each cluster (determine centroid and plot Intercluster RMSD)
     frames_unique, per_unique= compare_within_cluster(traj, frames_sep, per, distances[0], file_name)
-
     return frames_unique, per_unique, frames_sep
 
 def compare_within_cluster(traj, cluster_frames, per, rmsd_all, file_name):
@@ -243,7 +241,6 @@ def compare_within_cluster(traj, cluster_frames, per, rmsd_all, file_name):
         for i in range(cluster_traj.n_frames):
             rmsd_clust[i] = md.rmsd(cluster_traj, cluster_traj, i, atom_indices=cluster_traj.topology.select('element != H'))
             rmsd_clust_mean[i] = np.mean(rmsd_clust[i])
-        print(rmsd_clust_mean)
         min_index = np.argmin(rmsd_clust_mean)
         centroid_frame = frames[min_index]
         frames_unique.append(centroid_frame)
@@ -320,7 +317,7 @@ def process_confs(raw_traj, frames, per, file_name, id_type='Conformer'):
     plt.savefig(f'analysis/{file_name}_rg_hist.png') 
     plt.close()
 
-    return conf_ordered, traj
+    return conf_ordered, traj, per_non_zero
 
 def get_rel_ener(per_all):
     from scipy.constants import k, Avogadro
