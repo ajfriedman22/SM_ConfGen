@@ -11,6 +11,8 @@ Small molecule conformer generation using TREMD
 '''
 git clone git@github.com:ajfriedman22/SM_ConfGen.git
 cd SM_ConfGen
+mamba env create -f env.yaml
+mamba activate sm_confgen
 pip install .
 '''
 
