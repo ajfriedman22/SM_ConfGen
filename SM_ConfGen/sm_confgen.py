@@ -581,17 +581,16 @@ class SM_REMD:
         if rank == 0 and not os.path.exists('analysis/dihedrals'):
             os.mkdir('analysis/dihedrals')
         
-        # Determine indices for each rank
-        dihe_per_rank = len(dihe_name)/self.n_rep
-        df_max = pd.DataFrame(columns=['Dihedral Name', 'Dihderal Atom Index 1', 'Dihderal Atom Index 2', 'Dihderal Atom Index 3', 'Dihderal Atom Index 4', 'Maxima'])
-        for i in range(rank*dihe_per_rank, (rank+1)*dihe_per_rank):
-            maxima, dihe_dist = af.deter_multimodal(dihedral, i, dihe_name)
-            af.plot_torsion(dihe_dist, maxima, dihe_name[i])
-            #If multiple peaks add to dataframe
-            if len(maxima) > 1:
-                df = pd.DataFrame({'Dihedral Name': dihe_name[i], 'Dihderal Atom Index 1': dihe_ind[i][0], 'Dihderal Atom Index 2': dihe_ind[i][1], 'Dihderal Atom Index 3': dihe_ind[i][2], 'Dihderal Atom Index 4': dihe_ind[i][3], 'Maxima': maxima})
-                df_max = pd.concat([df_max, df])
-        df_max.to_csv('analysis/dihe_ind_max.csv')
+        if rank == 0:
+            df_max = pd.DataFrame(columns=['Dihedral Name', 'Dihderal Atom Index 1', 'Dihderal Atom Index 2', 'Dihderal Atom Index 3', 'Dihderal Atom Index 4', 'Maxima'])
+            for i in range(len(dihe_name)):
+                maxima, dihe_dist = af.deter_multimodal(dihedral, i, dihe_name)
+                af.plot_torsion(dihe_dist, maxima, dihe_name[i])
+                #If multiple peaks add to dataframe
+                if len(maxima) > 1:
+                    df = pd.DataFrame({'Dihedral Name': dihe_name[i], 'Dihderal Atom Index 1': dihe_ind[i][0], 'Dihderal Atom Index 2': dihe_ind[i][1], 'Dihderal Atom Index 3': dihe_ind[i][2], 'Dihderal Atom Index 4': dihe_ind[i][3], 'Maxima': maxima})
+                    df_max = pd.concat([df_max, df])
+            df_max.to_csv('analysis/dihe_ind_max.csv')
 
     def clust_dihedrals(self):
         """

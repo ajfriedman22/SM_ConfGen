@@ -265,13 +265,13 @@ def process_confs(raw_traj, frames, per, file_name, id_type='Conformer'):
     per_ordered, frames_ordered, conf_ordered = [], [], []
     conf = np.linspace(1, len(per_non_zero), num=len(per_non_zero))
     for idx in reversed(ordered_index):
-        per_ordered.append(per[idx])
+        per_ordered.append(per_non_zero[idx])
         frames_ordered.append(frames[idx])
         conf_ordered.append(conf[idx])
 
     #Save PDB
     traj = raw_traj.slice(frames_ordered)
-    traj.save_pdb(f'{file_name}.pdb')
+    traj.save_pdb(f'analysis/{file_name}.pdb')
 
     #Compute relative conformer energy
     rel_ener = get_rel_ener(per_ordered)
