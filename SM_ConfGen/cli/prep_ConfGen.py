@@ -84,11 +84,13 @@ def main():
     # Synchronyzation point for all ranks
     comm.barrier()
 
+    working_dir = os.getcwd()
+
     #Step 5: Preform NVT equilibration (if files not available)
-    if not os.path.exists('prep/rep_0/nvt.gro') and not os.path.exists(f'prep/rep_{TREMD.n_rep-1}/nvt.gro'): 
+    if not os.path.exists(f'{working_dir}/prep/rep_0/nvt.gro') and not os.path.exists(f'{working_dir}/prep/rep_{TREMD.n_rep-1}/nvt.gro'): 
         # 5-1. Set up input files for all simulations
         if rank < TREMD.n_rep:
-            os.chdir('prep')
+            os.chdir(f'{working_dir}/prep')
             if not os.path.exists(f'rep_{rank}/nvt.mdp'):
                 if not os.path.exists(f'rep_{rank}'):
                     os.mkdir(f'rep_{rank}')
@@ -107,10 +109,10 @@ def main():
     comm.barrier()
 
     #Step 6: Preform NPT equilibration (if files not available)
-    if not os.path.exists('prep/rep_0/npt.gro') and not os.path.exists(f'prep/rep_{TREMD.n_rep-1}/npt.gro'):
+    if not os.path.exists(f'{working_dir}/prep/rep_0/npt.gro') and not os.path.exists(f'{working_dir}/prep/rep_{TREMD.n_rep-1}/npt.gro'):
         # 6-1. Set up input files for all simulations
         if rank < TREMD.n_rep:
-            os.chdir('prep')
+            os.chdir(f'{working_dir}/prep')
             if not os.path.exists(f'rep_{rank}/npt.mdp'):
                 MDP = TREMD.initialize_MDP(rank, True, TREMD.mdp[2])
                 MDP.write(f'rep_{rank}/npt.mdp', skipempty=True)
@@ -126,6 +128,7 @@ def main():
 
     #Step 7: Run TREMD (check for chechpoint)
     check_pt = False 
+    os.chdir(working_dir)
     if not os.path.exists(f'rep_{rank}/md.cpt'): #Use checkpoint if present for all replicas
         check_pt = False
 
