@@ -131,6 +131,9 @@ class SM_REMD:
             "grompp_args": None,
             "runtime_args": None,
             "water_model": 'TIP3P',
+            "conformer_threshold": 1,
+            "peak_threshold": 0.0005,
+            "min_probability": 0.001, 
         }
 
         for i in optional_args:
@@ -190,11 +193,16 @@ class SM_REMD:
         self.n_rep = len(self.temp_range)
 
         #Check simulation parameters
-        float_or_int_params = ['nst_sim', 'dt', 'replex_rate']
-        for i in float_or_int_params:
-            if type(getattr(self, i)) != int and type(getattr(self, i)) != float and getattr(self, i) != None:
-                raise ParameterError(f"The parameter '{i}' should be an integer or float not {type(getattr(self, i))}.")
+        int_params = ['nst_sim', 'dt', 'replex_rate', 'conformer_threshold']
+        for i in int_params:
+            if type(getattr(self, i)) != int and getattr(self, i) != None:
+                raise ParameterError(f"The parameter '{i}' should be an integer not {type(getattr(self, i))}.")
         
+        float_params = ['peak_threshold', 'min_probability']
+        for i in float_params:
+            if type(getattr(self, i)) != float and getattr(self, i) != None:
+                raise ParameterError(f"The parameter '{i}' should be a float not {type(getattr(self, i))}.")
+            
         #Check that option input args are formatted correctly
         params_dict = ['grompp_args', 'runtime_args']
         for i in params_dict:
@@ -584,7 +592,7 @@ class SM_REMD:
         if rank == 0:
             df_max = pd.DataFrame(columns=['Dihedral Name', 'Dihderal Atom Index 1', 'Dihderal Atom Index 2', 'Dihderal Atom Index 3', 'Dihderal Atom Index 4', 'Maxima'])
             for i in range(len(dihe_name)):
-                maxima, dihe_dist = af.deter_multimodal(dihedral, i, dihe_name)
+                maxima, dihe_dist = af.deter_multimodal(dihedral, i, dihe_name, self.peak_threshold, self.min_probability)
                 af.plot_torsion(dihe_dist, maxima, dihe_name[i])
                 #If multiple peaks add to dataframe
                 if len(maxima) > 1:
@@ -637,11 +645,11 @@ class SM_REMD:
             per = 100*(count/traj.n_frames)
 
             # Step 5: Print conformer angle combinations, percent ligand is in conformation, and frame in which the ligand is in that conformation
-            conformer_list, traj_confs, per_non_zero = af.process_confs(traj, frame_select, per, f'{self.output_name}_dihe')
+            conformer_list, traj_confs, per_non_zero = af.process_confs(traj, frame_select, per, f'{self.output_name}_dihe', self.conformer_threshold)
 
             #Cluster conformers
             frames_dihe_clust, per_dihe_clust, group = af.clust_conf(traj_confs, per_non_zero, f'{self.output_name}_dihe_clust')
-            cluster_list, traj_clust_confs, clust_per = af.process_confs(traj_confs, frames_dihe_clust, per_dihe_clust, f'{self.output_name}_dihe_clust', 'Cluster')
+            cluster_list, traj_clust_confs, clust_per = af.process_confs(traj_confs, frames_dihe_clust, per_dihe_clust, f'{self.output_name}_dihe_clust', self.conformer_threshold, 'Cluster')
             df = pd.DataFrame({'Cluster ID': cluster_list, 'Grouped Confs': group})
             df.to_csv(f'analysis/{self.output_name}_dihe_clust_def.csv')
 

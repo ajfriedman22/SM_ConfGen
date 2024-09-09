@@ -40,26 +40,18 @@ def main():
 
    
     TREMD = SM_REMD(args.yaml)
-
-    # Step 1: Set up MPI rank and instantiate ReplicaExchangeEE to set up REXEE parameters
-    comm = MPI.COMM_WORLD
-    rank = comm.Get_rank()  # Note that this is a GLOBAL variable
     
     # Step 2: Create analysis directory if not present
-    if rank == 0 and not os.path.exists('analysis'):
+    if not os.path.exists('analysis'):
         os.mkdir('analysis')
 
     # Step 1: Process trajectory for lowest temperature replicate
     if not os.path.exists('analysis/center.xtc') or not os.path.exists('analysis/md.gro'):
         TREMD.process_traj()
-    # Synchronyzation point for all ranks
-    comm.barrier()
 
     #Step 2: Compute Dihedral Peaks
     if not os.path.exists('analysis/dihe_ind_max.csv'):
         TREMD.compute_dihedral_peaks()
-    # Synchronyzation point for all ranks
-    comm.barrier()
 
     #Step 3: Determine sampled conformations and cluster
     TREMD.clust_dihedrals()
