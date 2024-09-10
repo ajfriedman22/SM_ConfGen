@@ -259,8 +259,6 @@ class SM_REMD:
         print("============================")
         print(f"Python version: {sys.version}")
         print(f"GROMACS executable: {self.gmx_path}")  # we print the full path here
-        print(f"GROMACS version: {self.gmx_version}")
-        #print(f"SM ConfGen version: {SM_ConfGen.__version__}")
         print(f'Simulation Input Structure: {self.input_structure}')
         print(f'Simulation MDP Files: {self.mdp}')
         print(f"Number of replicas: {self.n_rep}")
