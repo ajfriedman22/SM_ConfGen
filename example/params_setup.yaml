@@ -1,4 +1,4 @@
-gmx_executable: 'gmx_mpi'
+gmx_executable: 'gmx'
 input_structure: 'isotonitazene_conformer3D.sdf'
 output_name: 'isot'
 temp_range: [300, 305]
