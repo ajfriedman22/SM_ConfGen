@@ -87,42 +87,35 @@ def get_dihedral(dihedrals_df : pd.DataFrame, traj : md.Trajectory):
             torsion_ind[i,j] = atom
     return torsion_name, torsion_ind
 
-def deter_multimodal(dihedrals : np.array, i : int, dihe_name : str):
+def deter_multimodal(dihedrals : np.array, i : int, dihe_name : str, peak_threshold : float, min_probability : float):
     """
     Determine the maxima for an n-modal distribution and then plot it
 
     Parameters
 
     """
-    from scipy.stats import gaussian_kde
-    from scipy.signal import find_peaks
-
     #Seperate dihedral angles
     dihe_dist = dihedrals[:,i]
     
     #Determine maxima for probability distribution
-    maxima, prob_minima, width = compute_max(dihe_dist, True)
-    
-    #If all angles are sampled this much than this is not a multimodal peak
-    if prob_minima > 0.002:
-        return [maxima], dihe_dist
+    maxima, right_width, left_width = compute_max(dihe_dist, min_probability)
 
     #Determine data not in the main peak
     main_peak, other_peak = [], []
     for i in dihe_dist:
-        if abs(i - maxima) < width or abs(i + 360 - maxima) < width or abs(i - 360 - maxima) < width:
+        if ((i - maxima) > 0 and (i-maxima) < right_width) or ((i + 360 - maxima) > 0 and (i+360-maxima) < right_width) or ((i - maxima) < 0 and abs(i-maxima) < left_width) or ((i - 360 - maxima) < 0 and abs(i-360-maxima) < left_width):
             main_peak.append(i)
         else:
             other_peak.append(i)
     all_maxima = [maxima]
 
     #If greater than 5% outliers count as seperate peak
-    while len(other_peak)/len(dihe_dist) > 0.05:
-        maxima, width = compute_max(other_peak)
+    while len(other_peak)/len(dihe_dist) > peak_threshold:
+        maxima, right_width, left_width = compute_max(other_peak, min_probability)
         new_dist = other_peak
         main_peak, other_peak = [], []
         for i in new_dist:
-            if abs(i - maxima) < width or abs(i + 360 - maxima) < width or abs(i - 360 - maxima) < width:
+            if ((i - maxima) > 0 and (i-maxima) < right_width) or ((i + 360 - maxima) > 0 and (i+360-maxima) < right_width) or ((i - maxima) < 0 and abs(i-maxima) < left_width) or ((i - 360 - maxima) < 0 and abs(i-360-maxima) < left_width):
                 main_peak.append(i)
             else:
                 other_peak.append(i)
@@ -147,7 +140,7 @@ def plot_torsion(dihe_dist, maxima, dihe_name):
     plt.savefig(f'analysis/dihedrals/dihe_angle_{dihe_name}.png')
     plt.close()
 
-def compute_max(data, init=False):
+def compute_max(data, min_probability):
     from scipy.stats import gaussian_kde
     import numpy as np
 
@@ -155,26 +148,34 @@ def compute_max(data, init=False):
     samples = np.linspace(-180, 180, 360)
     probs = kde.evaluate(samples)
     maxima_index = probs.argmax()
-    prob_minima = probs.min()
     maxima = samples[maxima_index]
 
     #Determine peak width
     prob = probs[maxima_index]
-    width = 1
+    right_width, left_width = 1, 1
     index = maxima_index
-    while prob > 0.0005:
-        width += 1
-        if maxima_index < 100:
-            index += 1
-        else:
-            index -= 1
-        if index == 360 or index < 0:
+    #Calculate width to the right
+    while prob > min_probability:
+        right_width += 1
+        index += 1
+        if index == 360:
+            index=0
+        if right_width == 360:
             break
         prob = probs[index]
-    if init:
-        return maxima, prob_minima, width
-    else:
-        return maxima, width
+    #Calculate width to the left
+    prob = probs[maxima_index]
+    index = maxima_index
+    while prob > min_probability:
+        left_width += 1
+        index -= 1
+        if index == -1:
+            index=359
+        if left_width == 360:
+            break
+        prob = probs[index]
+
+    return maxima, right_width, left_width
 
 def input_torsion():
     df_max = pd.read_csv('analysis/dihe_ind_max.csv')
@@ -259,19 +260,19 @@ def compare_within_cluster(traj, cluster_frames, per, rmsd_all, file_name):
     plt.close()    
     return frames_unique, per_unique
 
-def process_confs(raw_traj, frames, per, file_name, id_type='Conformer'):
+def process_confs(raw_traj, frames, per, file_name, threshold, id_type='Conformer'):
     per_non_zero = np.array(per[per!=0], dtype=float)
     ordered_index = per_non_zero.argsort()
     per_ordered, frames_ordered, conf_ordered = [], [], []
     conf = np.linspace(1, len(per_non_zero), num=len(per_non_zero))
     for idx in reversed(ordered_index):
-        per_ordered.append(per[idx])
+        per_ordered.append(per_non_zero[idx])
         frames_ordered.append(frames[idx])
         conf_ordered.append(conf[idx])
 
     #Save PDB
     traj = raw_traj.slice(frames_ordered)
-    traj.save_pdb(f'{file_name}.pdb')
+    traj.save_pdb(f'analysis/{file_name}.pdb')
 
     #Compute relative conformer energy
     rel_ener = get_rel_ener(per_ordered)
@@ -286,7 +287,7 @@ def process_confs(raw_traj, frames, per, file_name, id_type='Conformer'):
 
     labels = []
     for i, per in enumerate(df_clust['Occupancy']):
-        if per > 1.5:
+        if per > threshold:
             labels.append(df_clust[f'{id_type} ID'].values[i])
         else:
             labels.append('')

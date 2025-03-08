@@ -61,3 +61,4 @@ def main():
 
     #Run Simulation
     process = Popen(arguments)
+    process.wait()
