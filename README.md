@@ -1,7 +1,7 @@
 Small Molecule Conformer Generation
 ==============================
 
-Small molecule conformer generation using TREMD
+Small molecule conformer generation using TREMD. For more information please visit our [documentation](https://sm-confgen.readthedocs.io/en/latest/)
 
 ### Installation
 ```pre
