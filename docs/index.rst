@@ -5,13 +5,24 @@
 
 Welcome to Small Molecule Conformer Generation's documentation!
 =========================================================
+``SM_ConfGen`` is a Python package providing a method of generating ligand 
+conformers from Temperature Replic Exchange Molecular Dynamics (TREMD) 
+simulations in GROMACS.
 
 .. toctree::
-   :maxdepth: 2
-   :caption: Contents:
-
    getting_started
-   api
+   :maxdepth: 2
+   :caption: Getting started:
+
+.. toctree::
+   theory
+   :maxdepth: 2
+   :caption: Theory:
+
+.. toctree::
+   simulations
+   :maxdepth: 2
+   :caption: Launching SM_ConfGen simulations:
 
 
 
@@ -19,5 +30,3 @@ Indices and tables
 ==================
 
 * :ref:`genindex`
-* :ref:`modindex`
-* :ref:`search`
