@@ -13,4 +13,4 @@ build:
 
 python:
   install:
-    - sphinx_rtd_theme
+    - requirements: docs/requirements.txt
