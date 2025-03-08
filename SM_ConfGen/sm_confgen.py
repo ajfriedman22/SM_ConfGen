@@ -582,7 +582,7 @@ class SM_REMD:
             os.mkdir('analysis/dihedrals')
         
         # Determine indices for each rank
-        dihe_per_rank = len(dihe_name)/self.n_rep
+        dihe_per_rank = int(len(dihe_name)/self.n_rep)
         df_max = pd.DataFrame(columns=['Dihedral Name', 'Dihderal Atom Index 1', 'Dihderal Atom Index 2', 'Dihderal Atom Index 3', 'Dihderal Atom Index 4', 'Maxima'])
         for i in range(rank*dihe_per_rank, (rank+1)*dihe_per_rank):
             maxima, dihe_dist = af.deter_multimodal(dihedral, i, dihe_name)
