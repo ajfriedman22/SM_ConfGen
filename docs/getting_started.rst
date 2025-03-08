@@ -1,4 +1,4 @@
-Getting Started
+1. Getting Started
 ===============
 :code:`sm_confgen` is a Python package providing a method of generating ligand 
 conformers from Temperature Replic Exchange Molecular Dynamics (TREMD) 
@@ -8,8 +8,9 @@ simulations in GROMACS.
 ===============
 2.1. Requirements
 -----------------
-Before installing :code:`sm_confgen`, one should have a working version of `GROMACS`_. Please refer to the GROMACS documentation for full installation instructions.
-There is a provided 
+Before installing :code:`sm_confgen`, one should have a working version of `GROMACS`_. Please refer to the 
+GROMACS documentation for full installation instructions. All other dependencies are either included in the 
+provided conda environment or will be installed automatically by pip.
 
 .. _`GROMACS`: https://manual.gromacs.org/current/install-guide/index.html 
 

@@ -5,9 +5,11 @@
 There are many ways for which you can generate ligand conformers for the purpose of performing small molecule docking or utilizing 
 other protein design tools. The primary method by which these ligand conformers are traditionally generated is through the use of 
 fixed torsion drives which perform incremental rotations on all bonds within the ligands. Various scoring metrics are then utilized 
-to minimize the number of conformers to a number set by the user. This method produces a large number of ligand conformers which have 
-little garuntee to correspond to the sampled conformers of the ligand either in solution or in complex with the protein of interest. 
-This method of generating ligand conformers is significantly more computationally expensive, but has been found to be useful for 
+to minimize the number of conformers to a number set by the user. The perviously established methode produces a large number of ligand 
+conformers which have little garuntee to correspond to the sampled conformers of the ligand either in solution or in complex with the 
+protein of interest. 
+
+The SM_ConfGen method of generating ligand conformers is significantly more computationally expensive, but has been found to be useful for 
 generating ligand conformers for protein design efforts. This method is though to be particularly useful for more flexible ligands 
 which contain a large number of rotatable torsions. In this situation traditional ligand conformer generation methods would either 
 produce a large number of conformers for which the user would be unable or unwilling to utilize all of them or the user would need 
@@ -24,7 +26,7 @@ order to surrmount large free energy barriers in configurational space. The incr
 replicas increase the probability of crossing a large free energy barrier. The exchange between replicas allows for conformations 
 visited in higher temperature replicas to be sampled in lower temperture replicas without needing to run simulations longer.
 
-.. figure:: _static/images/TREMD.png
+.. figure:: _static/TREMD.png
    :name: Fig. 1
    :width: 800
    :align: center
@@ -50,7 +52,7 @@ not too high such that the solvent begins to move into a gas phase for which sol
 
 2. Analyzing Conformers
 =======================
-The analysis of the TREMD simulations is automated by the ::code::`sm_confgen` package. The analysis has three basic steps: trajectory processing, 
+The analysis of the TREMD simulations is automated by the `sm_confgen` package. The analysis has three basic steps: trajectory processing, 
 conformer sorting, and conformer clustering. 
 1. The trajectory processing centers the ligand in the solvent box, removes rotational and translational motion, and eliminates breaks across 
 the periodic boundary condition which may occur during the simualtion.
@@ -58,8 +60,7 @@ the periodic boundary condition which may occur during the simualtion.
 2. The confomer sorting analyzes all flexible dihedrals within the molecule excluding those involving hydrogen atoms. From these distributions we 
 can determine which flexible dihedrals are multi-modal meaning that there are multiple peaks in the probability distribution. Then we sort each 
 sampled conformer by which combination of dihedrals are sampled in the lowest energy simulation. 
-    * We then compute the relative free energy of each confomer using the Boltzmann equation $\Delta G = kT*ln(\frac{p_i}{p_j})$ where 
-    $p_j$ is the probability of the lowest energy conformer. 
+    * We then compute the relative free energy of each confomer using the Boltzmann equation :math:`\Delta G = kT*ln(\frac{p_i}{p_j})` where :math:`p_j`` is the probability of the lowest energy conformer. 
     * We also select a representative conformer from within each diedral group which is output to a PDB file. 
 
 3. We then perform hierarchical clustering on all representative conformers from each unique conforer group determined in step 2. This step further 
@@ -70,7 +71,7 @@ determined in step 2.
 Below we show an example of the ligand conformers determined in step 2 for the ligand mandipropamid.
 
 
-.. figure:: _static/images/example_output.png
+.. figure:: _static/example_output.png
    :name: Fig. 1
    :width: 800
    :align: center
